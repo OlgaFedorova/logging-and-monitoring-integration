@@ -1,0 +1,162 @@
+# Default values for integration-template-service.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  namespace: distributed-systems
+
+replicaCount: 1
+
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8081
+  name: integration-template-service
+  version: 0.0.1
+  clusterurl: apps-crc.testing
+
+ingress:
+  enabled: false
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# LOGGING INTEGRATION
+logs:
+  # Путь по которому находится файл с логами
+  # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+  dir: /usr/app/logs
+  fileCreationPattern: logs-%d{yyyy-MM-dd}-%i.log
+  appender:
+    rollingFile:
+      policies:
+        sizeBasedTriggeringPolicy:
+          size: 100MB
+      directWriteRolloverStrategy:
+        maxFiles: 4
+        delete:
+          maxDepth: 1
+          ifLastModified:
+            age: 1d
+    logstashLayout:
+      # Максимальное количество байт в логе
+      # Координировать изменения значения, вместе с параметром задающим максимальный размер лога в fluent-bit
+      # .Values.fluentBit.input.file.bufferMaxSize
+      maxByteCount: "1048576"
+
+fluentBit:
+  image: fluent/fluent-bit:1.5
+  input:
+    file:
+      # Маска имени файла
+      # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+      watchPattern: logs*.log
+      # Размер буфера памяти для плагина. Полученные данные записываются в буфер и очищаются при записи данных через
+      # выходные плагины. При ошибке вывода данных, логи перестанут очищаться из буфера. При достижении указанного лимита,
+      # ввод данных в плагин будет приостановлен до освобождения места в буфере
+      memBufLimit: 5MB
+      # Начальный размер буфера для плагина, так же размер нового сегмента памяти при увеличении размера буфера
+      bufferChunkSize: 32k
+      # Размер буфера для считываемого файла, используется для параметра Skip_Long_Lines (в fluent-bit.conf). При
+      # превышении указанного размера строки. Строка будет проигнорирована.
+      # Не рекомендуется увеличивать значение
+      bufferMaxSize: 1126k
+      # Периодичность с которой плагин, будет обновлять список считываемых файлов с логами для ввода данных
+      refreshInterval: 30
+  output:
+    kafka:
+      # Адрес брокера Кафка для записи
+      # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+      broker: kafka-dev-cp-kafka:9092
+      # Топик для записи
+      # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+      topic: tslg-app-logs
+      # Время которое librdkafka может хранить сообщение, при ошибке доставки, до удаления.
+      # 0 - бесконечное время
+      rdkafkaMessageTimeoutMs: 0
+      # Максимальный размер всех сообщений в стеке хранения сообщений librdkafka
+      rdkafkaQueueBufferingMaxKbytes: 5120
+      # Путь к файлу с корневым сертификатом
+      # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+      rdkafkaSslCaLocation: /fluent-bit/etc/cert/ca-kafka-cert.pem
+      # Путь к файлу с сертификатом клиента
+      # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+      rdkafkaSslCertificateLocation: /fluent-bit/etc/cert/client-kafka-cert.pem
+      # Путь к приватному ключу от сертификата клиента
+      # В зависимости от конфигурации компонентов системы, значение может потребоваться изменить
+      rdkafkaSslKeyLocation: /fluent-bit/etc/cert/client-kafka-cert-key.pem
+  filter:
+    recordModifier:
+      # Имя индекса которое будет присутствовать в конечном имени индекса в Elasticsearch
+      # Конечное имя индекса будет следующее: "tslg-app-logs-v1-<Имя неймспейса>.<Имя индекса>.logs-<Дата>"
+      targetEsIndex: springboot-log4j2-file
+  resources:
+    requests:
+      cpu: 10m
+      memory: 20Mi
+    limits:
+      cpu: 50m
+      memory: 50Mi

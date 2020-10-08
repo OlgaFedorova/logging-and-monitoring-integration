@@ -1,0 +1,121 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    name: {{ .Chart.Name }}
+  annotations:
+    description: "The Container integration-template-service deployment configuration"
+spec:
+  strategy:
+    type: Rolling
+    rollingParams:
+      timeoutSeconds: 18000
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+          - {{ .Chart.Name }}
+        from:
+          kind: ImageStreamTag
+          name: {{ .Chart.Name }}:{{ .Values.service.version }}
+  replicas: 1
+  selector:
+    name: {{ .Chart.Name }}
+    deploymentconfig: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        name: integration-template-service
+        deploymentconfig: {{ .Chart.Name }}
+    spec:
+      volumes:
+        - name: {{ .Chart.Name }}-config-volume
+          configMap:
+            name: {{ .Chart.Name }}-conf
+            defaultMode: 420
+        - name: logdir
+          emptyDir: {}
+        - name: fluent-bit-db
+          emptyDir: {}
+        - name: fluent-bit-config
+          configMap:
+            name: fluent-bit-config
+#        - name: logging-pki-client
+#          secret:
+#            secretName:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ .Values.global.namespace }}/{{ .Chart.Name }}:{{ .Values.service.version }}
+          env:
+            - name: SPRING_MAIN_BANNER_MODE
+              value: "off"
+            - name: LOGGING_CONFIG
+              value: /config/log4j2-prod.xml
+          volumeMounts:
+            - name: {{ .Chart.Name }}-config-volume
+              mountPath: /config
+            - name: logdir
+              mountPath: {{ .Values.logs.dir }}
+          imagePullPolicy: Always
+          ports:
+          - containerPort: {{ .Values.service.port }}
+            protocol: TCP
+        - name: fluent-bit
+          image: "{{ .Values.fluentBit.image }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BROKER
+              value: "{{ .Values.fluentBit.output.kafka.broker }}"
+            - name: KAFKA_TOPIC
+              value: "{{ .Values.fluentBit.output.kafka.topic }}"
+            - name: RDKAFKA_MESSAGE_TIMEOUT_MS
+              value: "{{ .Values.fluentBit.output.kafka.rdkafkaMessageTimeoutMs }}"
+            - name: RDKAFKA_QUEUE_BUFFERING_MAX_KBYTES
+              value: "{{ .Values.fluentBit.output.kafka.rdkafkaQueueBufferingMaxKbytes }}"
+            - name: APP_LOG_DIR
+              value: "{{ .Values.logs.dir }}"
+            - name: APP_LOG_FILE_WATCH_PATTERN
+              value: "{{ .Values.fluentBit.input.file.watchPattern }}"
+            - name: FLB_INPUT_MEM_BUF_LIMIT
+              value: "{{ .Values.fluentBit.input.file.memBufLimit }}"
+            - name: FLB_INPUT_BUFFER_CHUNK_SIZE
+              value: "{{ .Values.fluentBit.input.file.bufferChunkSize }}"
+            - name: FLB_INPUT_BUFFER_MAX_SIZE
+              value: "{{ .Values.fluentBit.input.file.bufferMaxSize }}"
+            - name: FLB_INPUT_REFRESH_INTERVAL
+              value: "{{ .Values.fluentBit.input.file.refreshInterval }}"
+            - name: TARGET_ES_INDEX
+              value: "{{ .Values.global.namespace }}.{{ .Values.fluentBit.filter.recordModifier.targetEsIndex }}"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          volumeMounts:
+            - name: logdir
+              mountPath: {{ .Values.logs.dir }}
+            - name: fluent-bit-db
+              mountPath: /var/local/fluent-bit
+            - name: fluent-bit-config
+              mountPath: /fluent-bit/etc/
+#            - name: logging-pki-client
+#              mountPath: /fluent-bit/etc/cert
+          resources: {{ toYaml .Values.fluentBit.resources | nindent 12 }}
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 60

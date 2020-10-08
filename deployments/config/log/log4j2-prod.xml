@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="10">
+    <Properties>
+        <Property name="appName">integration-template</Property>
+        <Property name="appType">JAVA</Property>
+        <!-- При необходимости эти поля могут быть изменены -->
+        <Property name="encProvider"/>
+    </Properties>
+    <Appenders>
+        <RollingFile name="File" immediateFlush="false" append="true"
+                     filePattern="/usr/app/logs/logs-%d{yyyy-MM-dd}-%i.log">
+            <!--
+              См. https://github.com/vy/log4j2-logstash-layout
+              locationInfoEnabled включает заполнение полей callerClass, callerLine и callerMethod и может
+              негативно влиять на производительность
+            -->
+            <LogstashLayout prettyPrintEnabled="false"
+                            stackTraceEnabled="true"
+                            locationInfoEnabled="true"
+                            emptyPropertyExclusionEnabled="true"
+                            mdcKeyPattern="(?!agrType|traceId|spanId|parentSpanId|userId|logicTime|extEventId).+"
+                            timeZoneId="UTC"
+                            dateTimeFormatPattern="yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+                            maxByteCount="1048576">
+                <EventTemplate>
+                    {
+                    "appName": "${appName}",
+                    "localTime": "${json:timestamp}",
+                    "level": "${json:level}",
+                    "text": "${json:message}",
+
+                    "eventId": "$${eventId:uuid}",
+                    "extEventId": "${json:mdc:extEventId}",
+                    "parentId": null,
+
+                    "encProvider": "${encProvider}",
+
+                    "agrType": "${json:mdc:agrType}",
+                    "traceId": "${json:mdc:traceId}",
+                    "spanId": "${json:mdc:spanId}",
+                    "parentSpanId": "${json:mdc:parentSpanId}",
+                    "userId": "${json:mdc:userId}",
+                    "logicTime": "${json:mdc:logicTime}",
+
+                    "appType": "${appType}",
+                    "stack": "${json:exception:stackTrace:text}",
+                    "levelInt": "${json:level:severity:code}",
+                    "loggerName": "${json:logger:name}",
+                    "threadName": "${json:thread:name}",
+                    "callerClass": "${json:source:className}",
+                    "callerMethod": "${json:source:methodName}",
+                    "callerLine": "${json:source:lineNumber}",
+                    "mdc": "${json:mdc}"
+                    }
+                </EventTemplate>
+            </LogstashLayout>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="100MB"/>
+            </Policies>
+            <DirectWriteRolloverStrategy maxFiles="4">
+                <Delete basePath="/usr/app/logs" maxDepth="1">
+                    <IfLastModified age="1d"/>
+                </Delete>
+            </DirectWriteRolloverStrategy>
+        </RollingFile>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="File"/>
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

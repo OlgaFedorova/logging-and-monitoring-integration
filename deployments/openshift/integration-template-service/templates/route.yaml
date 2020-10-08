@@ -1,0 +1,12 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  labels:
+    name: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}
+spec:
+  to:
+    kind: Service
+    name: {{ .Chart.Name }}
+  port:
+    targetPort: {{ .Values.service.port }}-tcp

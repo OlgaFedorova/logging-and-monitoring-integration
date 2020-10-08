@@ -1,0 +1,84 @@
+version: '3.7'
+
+volumes:
+  logs:
+  kafka:
+  fluent-bit-db:
+
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.1.1
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - 32181:32181
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-enterprise-kafka:5.1.1
+    hostname: kafka
+    container_name: kafka
+    expose:
+      - 9092
+      - 29092
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:29092
+      CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: zookeeper:32181
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      CONFLUENT_METRICS_ENABLE: 'true'
+      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
+
+  integration-template:
+    image: integration-template:0.0.1
+    container_name: integration-template
+    build:
+      dockerfile: .Dockerfile
+      context: ..
+    volumes:
+      - ./config/log:/config
+      - logs:/usr/app/logs
+    environment:
+      SPRING_MAIN_BANNER_MODE: "off"
+      LOGGING_CONFIG: /config/log4j2-prod.xml
+    ports:
+      - 8081:8081
+
+  fluent-bit:
+    image: fluent/fluent-bit:1.5
+    container_name: fluent-bit
+    depends_on:
+      - kafka
+      - integration-template
+    volumes:
+      - ./config/fluent-bit/:/fluent-bit/etc/
+      - logs:/usr/app/logs
+      - fluent-bit-db:/var/local/fluent-bit
+    environment:
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: tslg-app-logs
+      RDKAFKA_MESSAGE_TIMEOUT_MS: 0
+      RDKAFKA_QUEUE_BUFFERING_MAX_KBYTES: 5120
+      APP_LOG_DIR: /usr/app/logs
+      APP_LOG_FILE_WATCH_PATTERN: logs*.log
+      FLB_INPUT_MEM_BUF_LIMIT: 5MB
+      FLB_INPUT_BUFFER_CHUNK_SIZE: 32k
+      FLB_INPUT_BUFFER_MAX_SIZE: 1126k
+      FLB_INPUT_REFRESH_INTERVAL: 30
+      TARGET_ES_INDEX: dev.springboot-log4j2-file
+      NODE_NAME: dev
+      POD_NAME: integration-template
+      POD_NAMESPACE: dev
+      POD_IP: integration-template
