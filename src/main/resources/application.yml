@@ -4,3 +4,16 @@ server:
 spring:
   application:
     name: integration-template
+
+management:
+  endpoints:
+    enabled-by-default: false
+    web.exposure.include: health,prometheus
+  endpoint:
+    health.enabled: true
+    prometheus.enabled: true
+
+environment:
+  stack: local
+  region: ru-spb
+  node: node1
