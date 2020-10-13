@@ -17,7 +17,8 @@ public class MonitoringConfiguration {
         return registry -> registry.config().commonTags(Arrays.asList(
                 Tag.of("stack", environmentProperties.getStack()),
                 Tag.of("region", environmentProperties.getRegion()),
-                Tag.of("node", environmentProperties.getNode())
+                Tag.of("instance", environmentProperties.getInstance()),
+                Tag.of("application", environmentProperties.getApplication())
         ));
     }
 }

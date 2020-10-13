@@ -13,6 +13,7 @@ public class EnvironmentProperties {
 
     private final String stack;
     private final String region;
-    private final String node;
+    private final String instance;
+    private final String application;
 
 }
