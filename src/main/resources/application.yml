@@ -16,4 +16,5 @@ management:
 environment:
   stack: local
   region: ru-spb
-  node: node1
+  instance: node1
+  application: ${spring.application.name}
